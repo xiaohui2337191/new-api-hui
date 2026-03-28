@@ -16,6 +16,17 @@
 ### 令牌桶限流器
 针对 AirForce 的平滑限流，避免突发请求触发全局限流，支持全局 IP 限流和 Key 级别限流。
 
+### AirForce 批量注册脚本
+提供 `airforce_register.py` 脚本，使用 DrissionPage 自动化注册 AirForce 账号并获取 API Key。
+
+```bash
+# 安装依赖
+pip install DrissionPage
+
+# 运行
+python airforce_register.py
+```
+
 ## 环境变量配置
 
 ```bash
