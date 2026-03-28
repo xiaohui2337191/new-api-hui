@@ -1,0 +1,58 @@
+# Mihomo/Clash Meta 配置文件示例
+# 
+# 使用方法:
+#   1. 复制此文件为 config.yaml
+#   2. 添加你的代理节点或订阅
+#
+# ⚠️ 警告: config.yaml 包含订阅地址，请勿提交到 Git!
+
+# 基础配置
+mixed-port: 7890
+allow-lan: true
+bind-address: '*'
+mode: rule
+log-level: info
+ipv6: false
+external-controller: 0.0.0.0:9090
+
+# DNS 配置
+dns:
+  enable: true
+  listen: 0.0.0.0:53
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  nameserver:
+    - 223.5.5.5
+    - 119.29.29.29
+
+# 代理节点
+# 在此添加你的代理节点，例如:
+# proxies:
+#   - name: "节点1"
+#     type: ss
+#     server: server.com
+#     port: 443
+#     cipher: aes-256-gcm
+#     password: password
+proxies: []
+
+# 代理组
+proxy-groups:
+  - name: GLOBAL
+    type: select
+    proxies:
+      - DIRECT
+
+# 规则
+rules:
+  # AirForce API
+  - DOMAIN-SUFFIX,api.airforce,GLOBAL
+  - DOMAIN-SUFFIX,airforce,GLOBAL
+  
+  # AI 服务
+  - DOMAIN-SUFFIX,openai.com,GLOBAL
+  - DOMAIN-SUFFIX,anthropic.com,GLOBAL
+  - DOMAIN-SUFFIX,claude.ai,GLOBAL
+  
+  # 默认直连
+  - MATCH,DIRECT

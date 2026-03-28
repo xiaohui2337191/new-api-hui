@@ -1,0 +1,109 @@
+name: Build Windows x64
+
+on:
+  push:
+    branches: [stable]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build frontend
+        run: |
+          cd web
+          npm install --legacy-peer-deps
+          NODE_OPTIONS="--max-old-space-size=4096" VITE_REACT_APP_VERSION=$(cat ../VERSION 2>/dev/null || echo "0.0.0") npm run build
+
+      - name: Build new-api for Windows x64
+        env:
+          CGO_ENABLED: 0
+          GOOS: windows
+          GOARCH: amd64
+        run: |
+          go build -ldflags "-s -w" -o new-api.exe .
+
+      - name: Download mihomo for Windows
+        run: |
+          curl -L -o mihomo.zip "https://github.com/MetaCubeX/mihomo/releases/download/v1.19.20/mihomo-windows-amd64-v1.19.20.zip"
+          unzip mihomo.zip || apt-get install -y unzip && unzip mihomo.zip
+          mv mihomo-windows-amd64*.exe mihomo.exe || mv mihomo.exe mihomo.exe 2>/dev/null || ls -la
+
+      - name: Download geoip database
+        run: |
+          curl -L -o geoip.metadb "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip.metadb" || true
+
+      - name: Create Windows start script
+        run: |
+          cat > start.bat << 'EOF'
+          @echo off
+          setlocal EnableDelayedExpansion
+
+          echo ======================================
+          echo New-API Windows Launcher
+          echo ======================================
+
+          :: 设置默认值
+          if not defined CLASH_CONFIG_PATH set CLASH_CONFIG_PATH=%~dp0clash
+          if not defined CLASH_PROXY_GROUP set CLASH_PROXY_GROUP=🔰国外流量
+          if not defined HTTP_PROXY set HTTP_PROXY=http://127.0.0.1:7890
+          if not defined HTTPS_PROXY set HTTPS_PROXY=http://127.0.0.1:7890
+          if not defined CLASH_API_URL set CLASH_API_URL=http://127.0.0.1:9090
+
+          :: 创建配置目录
+          if not exist "%CLASH_CONFIG_PATH%" mkdir "%CLASH_CONFIG_PATH%"
+
+          :: 下载订阅配置
+          if defined CLASH_SUBSCRIBE_URL (
+              echo Downloading clash config...
+              curl -L -o "%CLASH_CONFIG_PATH%\config.yaml" -H "User-Agent: clash-meta" "%CLASH_SUBSCRIBE_URL%" 2>nul
+          )
+
+          :: 复制 geoip
+          if exist "%~dp0geoip.metadb" (
+              copy /Y "%~dp0geoip.metadb" "%CLASH_CONFIG_PATH%\" >nul
+          )
+
+          :: 启动 mihomo
+          if exist "%CLASH_CONFIG_PATH%\config.yaml" (
+              if exist "%~dp0mihomo.exe" (
+                  echo Starting mihomo...
+                  cd /d "%CLASH_CONFIG_PATH%"
+                  start "" "%~dp0mihomo.exe" -d .
+                  cd /d "%~dp0"
+                  timeout /t 3 /nobreak >nul
+              )
+          )
+
+          :: 启动 new-api
+          echo Starting new-api...
+          new-api.exe
+          EOF
+
+      - name: Create release package
+        run: |
+          mkdir -p release/clash
+          cp new-api.exe release/
+          cp mihomo.exe release/clash/ || true
+          cp geoip.metadb release/clash/ || true
+          cp start.bat release/ || true
+          cd release && zip -r ../new-api-windows-x64.zip .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: new-api-windows-x64
+          path: new-api-windows-x64.zip

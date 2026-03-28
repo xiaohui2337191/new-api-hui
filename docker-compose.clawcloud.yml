@@ -1,0 +1,74 @@
+# New-API ClawCloud 部署配置
+# 
+# 使用方法:
+#   1. 复制 .env.example 为 .env
+#   2. 修改 .env 中的配置
+#   3. docker-compose -f docker-compose.clawcloud.yml up -d
+#
+# 包含服务:
+#   - new-api: API 网关服务
+#   - redis: 缓存服务
+#   - mihomo: 代理服务 (Clash Meta)
+#
+# 注意: 使用 SQLite 数据库，数据存储在 ./data 目录
+
+version: '3.4'
+
+services:
+  new-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: new-api:latest
+    container_name: new-api
+    restart: always
+    command: --log-dir /app/logs
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      - ./data:/data
+      - ./logs:/app/logs
+    environment:
+      - TZ=Asia/Shanghai
+      - REDIS_CONN_STRING=redis://redis
+      # 代理配置
+      - HTTP_PROXY=http://mihomo:7890
+      - HTTPS_PROXY=http://mihomo:7890
+      - CLASH_API_URL=http://mihomo:9090
+      - CLASH_PROXY_GROUP=${CLASH_PROXY_GROUP:-GLOBAL}
+      # 功能开关
+      - ERROR_LOG_ENABLED=true
+      - BATCH_UPDATE_ENABLED=true
+      # 会话密钥 (生产环境必须修改!)
+      - SESSION_SECRET=${SESSION_SECRET:-change_me_in_production}
+    depends_on:
+      - redis
+      - mihomo
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:3000/api/status | grep -o '\"success\":\\s*true' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  redis:
+    image: redis:alpine
+    container_name: redis
+    restart: always
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+
+  mihomo:
+    image: metacubex/mihomo:latest
+    container_name: mihomo
+    restart: always
+    ports:
+      - "7890:7890"
+      - "9090:9090"
+    volumes:
+      - ./clash:/root/.config/clash:ro
+    environment:
+      - TZ=Asia/Shanghai
+
+volumes:
+  redis_data:

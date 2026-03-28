@@ -1,0 +1,72 @@
+# New-API with Clash Proxy Pool
+# 
+# 启动: docker-compose -f docker-compose.clash.yml up -d
+#
+# 配置说明:
+#   1. 将你的Clash订阅链接填入 CLASH_SUBSCRIPTION_URL
+#   2. 或者将clash配置文件挂载到 /root/.config/clash/config.yaml
+#
+# Clash API: http://localhost:9090
+# New-API: http://localhost:3000
+
+version: '3.4'
+
+services:
+  new-api:
+    image: calciumion/new-api:latest
+    container_name: new-api
+    restart: always
+    command: --log-dir /app/logs
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/data
+      - ./logs:/app/logs
+    environment:
+      - SQL_DSN=postgresql://root:123456@postgres:5432/new-api
+      - REDIS_CONN_STRING=redis://redis
+      - TZ=Asia/Shanghai
+      # 代理配置 - 指向Clash容器
+      - HTTP_PROXY=http://clash:7890
+      - HTTPS_PROXY=http://clash:7890
+      # Clash API地址（用于节点轮换）
+      - CLASH_API_URL=http://clash:9090
+      - CLASH_PROXY_GROUP=GLOBAL
+    depends_on:
+      - redis
+      - postgres
+      - clash
+
+  clash:
+    image: metacubex/mihomo:latest
+    container_name: clash
+    restart: always
+    ports:
+      - "7890:7890"   # HTTP代理端口
+      - "9090:9090"   # API端口
+    volumes:
+      # 挂载你的clash配置文件
+      - ./clash/config.yaml:/root/.config/clash/config.yaml:ro
+    environment:
+      # 或者使用订阅链接（需要在外部配置）
+      # - CLASH_SUBSCRIPTION_URL=你的订阅链接
+      - TZ=Asia/Shanghai
+
+  redis:
+    image: redis:latest
+    container_name: redis
+    restart: always
+
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    restart: always
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: 123456
+      POSTGRES_DB: new-api
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+volumes:
+  pg_data:

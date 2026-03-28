@@ -1,0 +1,98 @@
+name: Build Release Binaries
+
+on:
+  push:
+    branches: [main, master]
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build frontend
+        run: |
+          cd web
+          npm install --legacy-peer-deps
+          NODE_OPTIONS="--max-old-space-size=4096" VITE_REACT_APP_VERSION=$(cat ../VERSION 2>/dev/null || echo "0.0.0") npm run build
+
+      - name: Build new-api
+        env:
+          CGO_ENABLED: 0
+          GOOS: linux
+          GOARCH: ${{ matrix.arch }}
+        run: |
+          go build -ldflags "-s -w" -o new-api-linux-${{ matrix.arch }} .
+
+      - name: Download mihomo
+        run: |
+          if [ "${{ matrix.arch }}" = "amd64" ]; then
+            MIHOMO_ARCH="amd64"
+          else
+            MIHOMO_ARCH="arm64"
+          fi
+          curl -L -o mihomo.gz "https://github.com/MetaCubeX/mihomo/releases/download/v1.19.20/mihomo-linux-${MIHOMO_ARCH}-v1.19.20.gz"
+          gunzip mihomo.gz
+          chmod +x mihomo
+          mv mihomo mihomo-linux-${{ matrix.arch }}
+
+      - name: Download geoip database
+        run: |
+          curl -L -o geoip.metadb "https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip.metadb" || true
+
+      - name: Create release package
+        run: |
+          mkdir -p release/clash
+          cp new-api-linux-${{ matrix.arch }} release/new-api
+          cp mihomo-linux-${{ matrix.arch }} release/clash/mihomo
+          cp geoip.metadb release/clash/ || true
+          cp start.sh release/ || true
+          chmod +x release/new-api release/clash/mihomo release/start.sh 2>/dev/null || true
+          tar -czvf new-api-linux-${{ matrix.arch }}.tar.gz -C release .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: new-api-linux-${{ matrix.arch }}
+          path: new-api-linux-${{ matrix.arch }}.tar.gz
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download amd64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: new-api-linux-amd64
+          path: ./artifacts
+
+      - name: Download arm64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: new-api-linux-arm64
+          path: ./artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ./artifacts/*.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

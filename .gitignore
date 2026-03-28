@@ -1,0 +1,65 @@
+.idea
+.vscode
+.zed
+upload
+*.exe
+*.db
+build
+*.db-journal
+logs
+web/dist
+.env
+one-api
+new-api
+/__debug_bin*
+.DS_Store
+tiktoken_cache
+.eslintcache
+.gocache
+.gomodcache/
+.cache
+web/bun.lock
+plans
+
+electron/node_modules
+electron/dist
+data/
+.gomodcache/
+.gocache-temp
+.gopath
+
+# 敏感文件 - 不要提交
+.keys
+apikey.txt
+cookies.txt
+nodes.txt
+*.pem
+*.key
+
+# Clash 配置文件（包含订阅地址）
+clash/config.yaml
+clash/cache.db
+clash/*.db
+
+# 对话记录文件
+conversation-*.txt
+conversation-*.txt.bak
+
+# Redis 数据
+dump.rdb
+
+# 测试脚本中的敏感信息
+test.sh
+test_airforce.sh
+
+# Clash 敏感文件
+clash/mihomo
+clash/geoip.metadb
+clash/mihomo.log
+
+# 日志文件
+server.log
+server.log.bak
+
+# 测试二进制
+new-api-test
